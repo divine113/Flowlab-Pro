@@ -147,6 +147,8 @@ with tempfile.TemporaryDirectory(prefix='eatl-frozen-check-') as temporary:
         assert report['database_vendor'] == 'sqlite'
         # Exercise update-in-place from the previous deployed schema, not only first install.
         previous = Path(__file__).resolve().parents[1] / 'release' / 'SQLite-Snapshot-20261015' / 'data' / 'eatl.sqlite3'
+        if not previous.is_file():
+            previous = Path(__file__).resolve().parents[1] / 'release' / 'OLD' / 'SQLite-Snapshot-20261015' / 'data' / 'eatl.sqlite3'
         if previous.is_file():
             upgrade_root=Path(temporary)/'previous-installation'
             upgrade_data=upgrade_root/'data'; upgrade_data.mkdir(parents=True)
@@ -170,6 +172,74 @@ with tempfile.TemporaryDirectory(prefix='eatl-frozen-check-') as temporary:
                 assert upgraded_db.execute("SELECT name FROM django_migrations WHERE app='core' AND name='0056_job_supervisor_review'").fetchone()
                 assert upgraded_db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='flow_environment_readings'").fetchone()
             checked_routes.append('previous-installation upgrade: accounts, passwords and data retained')
+        # Real frozen Waitress process behind a simulated ngrok HTTPS proxy.
+        # Connect over loopback but preserve the public Host and forwarded scheme.
+        public_host='supersolemn-leontine-honorable.ngrok-free.dev'
+        public_origin='https://'+public_host
+        public_root=Path(temporary)/'public-hosting'; public_data=public_root/'data'
+        public_data.mkdir(parents=True)
+        with closing(sqlite3.connect(data/'eatl.sqlite3')) as source, closing(sqlite3.connect(public_data/'eatl.sqlite3')) as target:
+            source.backup(target)
+        with socket.socket() as probe:
+            probe.bind(('127.0.0.1',0)); public_port=probe.getsockname()[1]
+        public_env=dict(environment,EATL_RUNTIME_ROOT=str(public_root),EATL_PUBLIC_URL=public_origin,
+            DJANGO_ALLOWED_HOSTS='127.0.0.1,localhost,'+public_host,
+            DJANGO_CSRF_TRUSTED_ORIGINS=public_origin,DJANGO_SECURE_COOKIES='1',EATL_TRUSTED_PROXY='127.0.0.1')
+        public_process=subprocess.Popen([str(exe),'--port',str(public_port)],env=public_env,cwd=bundle)
+        try:
+            import http.client
+            from http.cookies import SimpleCookie
+            cookies={}
+            def public_request(path,method='GET',values=None,origin=True,host=public_host):
+                headers={'Host':host,'X-Forwarded-Proto':'https'}
+                if cookies: headers['Cookie']='; '.join(key+'='+value for key,value in cookies.items())
+                if origin:
+                    headers.update(Origin=public_origin,Referer=public_origin+'/ei-lab/login/')
+                body=urlencode(values) if values is not None else None
+                if body is not None: headers['Content-Type']='application/x-www-form-urlencoded'
+                transport=http.client.HTTPConnection('127.0.0.1',public_port,timeout=30)
+                try:
+                    transport.request(method,path,body=body,headers=headers)
+                    result=transport.getresponse(); payload=result.read()
+                    response_headers=result.getheaders()
+                    for key,value in response_headers:
+                        if key.lower()=='set-cookie':
+                            parsed=SimpleCookie();parsed.load(value)
+                            cookies.update({name:item.value for name,item in parsed.items()})
+                    return result.status,payload,response_headers
+                finally:
+                    transport.close()
+            deadline=time.monotonic()+60
+            while True:
+                try:
+                    assert public_request('/')[0]==200
+                    break
+                except OSError:
+                    if public_process.poll() is not None or time.monotonic()>deadline:
+                        problem=public_root/'startup-error.log'
+                        raise RuntimeError('Public frozen server failed: '+(problem.read_text() if problem.exists() else 'timeout'))
+                    time.sleep(.5)
+            assert public_request('/ei-lab/login/',host='untrusted.example')[0]==400
+            assert public_request('/login')[0]==200
+            status,page,headers=public_request('/ei-lab/login/')
+            assert status==200 and any(key.lower()=='set-cookie' and 'Secure' in value for key,value in headers)
+            csrf=re.search(rb'name="csrfmiddlewaretoken" value="([^"]+)"',page).group(1).decode()
+            values={'username':username,'password':password,'csrfmiddlewaretoken':csrf}
+            # HTTPS without Origin or Referer must fail, proving the forwarded
+            # scheme reached Django rather than being silently discarded.
+            assert public_request('/ei-lab/login/','POST',values,origin=False)[0]==403
+            assert public_request('/ei-lab/login/','POST',values)[0]==302
+            assert public_request('/ei-lab/jobs/')[0]==200
+            assert public_request('/dashboard')[0]==302, 'E&I session leaked into FlowLab'
+            status,page,headers=public_request('/login','POST',{'username':username,'password':password})
+            assert status==302 and any(key.lower()=='set-cookie' and 'Secure' in value for key,value in headers)
+            assert public_request('/dashboard')[0]==200
+            assert public_request('/ei-lab/static/core/ei-module-theme.css')[0]==200
+            checked_routes.append('public HTTPS proxy: both real logins, separate secure sessions, assets, rejected untrusted host and missing CSRF referer')
+        finally:
+            if public_process.poll() is None:
+                subprocess.run(['taskkill','/PID',str(public_process.pid),'/T','/F'],capture_output=True)
+            public_process.wait(timeout=15)
         verification={'status':'passed','executable':str(exe),'sha256':hashlib.sha256(exe.read_bytes()).hexdigest(),
             'routes':checked_routes,'database':'embedded SQLite snapshot installed in disposable runtime; repeated launch preserves data; previous-schema upgrade preserves accounts, passwords and custom data'}
         (bundle/'executable-verification.json').write_text(json.dumps(verification,indent=2),encoding='utf8')

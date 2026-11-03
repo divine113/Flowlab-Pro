@@ -6,6 +6,8 @@ The browser opens automatically. Port 5050 is preferred; if occupied, another fr
 
 YOUR RECORDS
 The verified PostgreSQL snapshot and associated uploaded files are embedded in this PRIVATE executable. Existing usernames and password hashes are retained; both module logins remain independent. PostgreSQL was not changed. Entries added later to PostgreSQL do not automatically synchronize with this offline copy.
+
+PUBLIC HOSTING: Both modules share one Waitress port. See Server-Hosting.md. Merge configuration.ngrok.env into configuration.env beside the executable for the supplied HTTPS review address. Use that HTTPS address for sign-in with secure cookies. Preserve the public Host and configure only the exact trusted proxy IP. Do not start Flask or Django as a separate second application.
 On the first launch the embedded data is copied to:
 %LOCALAPPDATA%\EATL-Integrated-Lab\data\eatl.sqlite3
 Uploaded files remain in the subfolders beneath data. Future launches reuse this data and NEVER replace it with the embedded snapshot. Keep the data folder safe and back it up regularly. Copying only an updated EXE does not update or overwrite an already-installed database.

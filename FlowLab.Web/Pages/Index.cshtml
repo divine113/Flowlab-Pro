@@ -1,0 +1,14 @@
+﻿@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<section class="page-heading"><p>Laboratory workspace</p><h1>Operational overview</h1></section>
+<section class="metric-grid">
+    <article><strong>@Model.Summary.Equipment</strong><span>Equipment assets</span></article>
+    <article><strong>@Model.Summary.Programme</strong><span>Calibration programme</span></article>
+    <article><strong>@Model.Summary.Documents</strong><span>Controlled documents</span></article>
+    <article><strong>@Model.Summary.Sessions</strong><span>Measurement sessions</span></article>
+</section>
+<section class="surface"><h2>ASP.NET Core web migration</h2><p>The new web shell is connected to the existing FlowLab database during transition. Equipment, programme, documents, and measurement modules will migrate here incrementally.</p></section>

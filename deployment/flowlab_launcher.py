@@ -15,26 +15,19 @@ import threading
 import time
 import traceback
 import webbrowser
+if not getattr(sys, 'frozen', False):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from deployment.server_config import configure_hosting, waitress_proxy_options
 
 
 HOST = "127.0.0.1"
 FLOWLAB_PORT = 5050
-BUILD_ID = '20261016-monitoring-analytics-ei-authority-r2'
+BUILD_ID = '20261019-single-origin-server-hosting'
 
 
 def load_configuration(root: Path) -> None:
     """Load deployment values without requiring a Python environment."""
-    config = root / "configuration.env"
-    if not config.is_file():
-        return
-    for raw_line in config.read_text(encoding="utf-8-sig").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        key, value = key.strip(), value.strip().strip('"').strip("'")
-        if key:
-            os.environ.setdefault(key, value)
+    configure_hosting(root)
 
 
 def install_directory() -> Path:
@@ -143,7 +136,7 @@ def create_local_server(application, port):
         else:
             listener.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
         listener.bind((HOST,port))
-        return create_server(application,sockets=[listener],threads=8)
+        return create_server(application,sockets=[listener],threads=8, **waitress_proxy_options())
     except Exception:
         listener.close()
         raise
@@ -175,6 +168,10 @@ def main() -> None:
         force=True,
     )
     load_configuration(install_directory())
+    if args.port is None:
+        FLOWLAB_PORT = int(os.environ.get('EATL_PORT', '5050'))
+        if not 1 <= FLOWLAB_PORT <= 65535:
+            raise ValueError('EATL_PORT must be between 1 and 65535.')
     # This deployment is deliberately SQLite-only, including on computers that
     # still have PostgreSQL URLs in their environment from the source app.
     os.environ.update(FLOWLAB_DATABASE_URL='', EI_LAB_DATABASE_URL='', DATABASE_URL='', EI_LAB_FORCE_SQLITE='1')
@@ -245,7 +242,7 @@ def main() -> None:
         (root / 'deployment-check.json').write_text(json.dumps({'status':'passed', 'database_vendor':connection.vendor, 'pending_migrations':0, 'port':FLOWLAB_PORT}, indent=2), encoding='utf-8')
         return
 
-    if args.port is None:
+    if args.port is None and not os.environ.get('EATL_PUBLIC_URL') and 'EATL_PORT' not in os.environ:
         for port in range(5050, 5071):
             try:
                 server = create_local_server(application,port)

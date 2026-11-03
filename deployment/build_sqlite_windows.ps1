@@ -30,5 +30,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Executable build failed.' }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'README-SQLite.txt') -Destination (Join-Path $releaseRoot 'README.txt')
 Copy-Item -LiteralPath (Join-Path $snapshotRoot 'migration-verification.json') -Destination $releaseRoot
 Copy-Item -LiteralPath (Join-Path $projectRoot 'docs\EI-workflow-audit-20261016.md') -Destination (Join-Path $releaseRoot 'Workflow-Review.md')
-Compress-Archive -Path (Join-Path $releaseRoot 'EATL-Integrated-Lab.exe'),(Join-Path $releaseRoot 'README.txt'),(Join-Path $releaseRoot 'migration-verification.json'),(Join-Path $releaseRoot 'Workflow-Review.md') -DestinationPath (Join-Path $releaseRoot 'EATL-SQLite-Windows.zip')
+Copy-Item -LiteralPath (Join-Path $projectRoot 'docs\server-hosting.md') -Destination (Join-Path $releaseRoot 'Server-Hosting.md')
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'ngrok.env.example') -Destination (Join-Path $releaseRoot 'configuration.ngrok.env')
+Compress-Archive -Path (Join-Path $releaseRoot 'EATL-Integrated-Lab.exe'),(Join-Path $releaseRoot 'README.txt'),(Join-Path $releaseRoot 'migration-verification.json'),(Join-Path $releaseRoot 'Workflow-Review.md'),(Join-Path $releaseRoot 'Server-Hosting.md'),(Join-Path $releaseRoot 'configuration.ngrok.env') -DestinationPath (Join-Path $releaseRoot 'EATL-SQLite-Windows.zip')
 Write-Output "Private SQLite executable: $releaseRoot"

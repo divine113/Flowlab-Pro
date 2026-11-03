@@ -18,6 +18,11 @@ ROOT = Path(__file__).resolve().parent
 EI_ROOT = ROOT / "jobrec-review"
 INSTALL_ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else ROOT
 
+# Read the same deployment file in source mode and the standalone executable,
+# before Django freezes its settings. Both applications keep one public origin.
+from deployment.server_config import configure_hosting
+PUBLIC_ORIGIN = configure_hosting(INSTALL_ROOT)
+
 
 def _add_ei_lab_environment() -> None:
     """Make the existing E&I virtualenv and project importable in this process."""
@@ -47,6 +52,7 @@ from web_app import app as flowlab_app  # noqa: E402
 # A Flask-only server may have used another database with the generic cookie.
 # Do not carry those old session IDs into the integrated database after upgrade.
 flowlab_app.config['SESSION_COOKIE_NAME'] = 'eatl_integrated_flowlab_session'
+flowlab_app.config['SESSION_COOKIE_SECURE'] = os.environ['DJANGO_SECURE_COOKIES'].lower() in ('1', 'true', 'yes', 'on')
 
 
 ei_lab_app = get_wsgi_application()
