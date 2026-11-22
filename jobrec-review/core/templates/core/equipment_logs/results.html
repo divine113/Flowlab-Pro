@@ -1,0 +1,80 @@
+{% extends 'core/base.html' %}{% load static %}{% block title %}Certificate Processed{% endblock %}{% block content %}
+<link rel="stylesheet" href="{% static 'core/equipment-logs.css' %}">
+<style>
+    .el-res-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+    .el-res-stat { background: var(--card, #fff); border: 1px solid var(--ei-border, #dce4ea); border-radius: 10px; padding: 12px 16px; min-width: 150px; }
+    .el-res-stat-val { font-size: 20px; font-weight: 700; color: #10222e; }
+    .el-res-stat-lab { font-size: 11px; color: var(--mu, #5d7080); text-transform: uppercase; letter-spacing: .04em; }
+    .el-res-card { background: var(--card, #fff); border: 1px solid var(--ei-border, #dce4ea); border-radius: 12px; padding: 0; margin-bottom: 16px; overflow: hidden; }
+    .el-res-card-head { background: #f4f7f9; padding: 12px 16px; border-bottom: 1px solid var(--ei-border, #dce4ea); font-weight: 700; font-size: 13px; color: #0b4a5a; text-transform: uppercase; letter-spacing: .04em; }
+    .el-res-card-body { padding: 16px; }
+    .el-res-sheet { border: 1px solid var(--ei-border, #dce4ea); border-radius: 8px; overflow: auto; max-height: 600px; }
+    .el-chip { display: inline-block; background: var(--bg, #f1f5f8); border-radius: 8px; padding: 4px 10px; font-size: 12px; color: var(--mu, #5d7080); margin: 2px 4px 2px 0; }
+    .el-chip.el-review { background: #fff2d6; color: #9a6a00; outline: 1px solid #f0c04a; }
+    .el-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+    .el-mini { padding: 6px 12px; border-radius: 8px; border: 1px solid #c9dce5; background: var(--card, #fff); cursor: pointer; font: inherit; font-size: 12px; text-decoration: none; color: inherit; }
+    .el-note { font-size: 12px; color: var(--mu, #5d7080); margin-top: 8px; }
+    .el-empty { text-align: center; color: var(--mu, #5d7080); padding: 24px; }
+</style>
+
+<div class="el-res-card">
+    <div class="el-res-card-head">Result Summary</div>
+    <div class="el-res-card-body">
+        <div class="el-res-header">
+            <div class="el-res-stat">
+                <div class="el-res-stat-val">{{ filled_count }}</div>
+                <div class="el-res-stat-lab">Fields populated</div>
+            </div>
+            <div class="el-res-stat">
+                <div class="el-res-stat-val">{{ needs_review|length }}</div>
+                <div class="el-res-stat-lab">Fields needing review</div>
+            </div>
+            <div class="el-res-stat">
+                <div class="el-res-stat-val">{{ missing|length }}</div>
+                <div class="el-res-stat-lab">Fields not found</div>
+            </div>
+        </div>
+
+        <div class="el-note" style="margin-top: 12px;">
+            <strong>Template:</strong> {{ template_name }} &nbsp;|&nbsp;
+            <strong>Provider:</strong> {{ provider|default:'text' }} &nbsp;|&nbsp;
+            <strong>Uploaded file:</strong> {{ filename }}
+        </div>
+
+        {% if needs_review %}
+        <div style="margin-top: 12px;">
+            <strong style="color: #9a6a00">Review these fields:</strong>
+            <div style="margin-top: 6px;">
+                {% for m in needs_review %}
+                <span class="el-chip el-review" title="{{ m.field }}: {{ m.confidence|floatformat:2 }}">{{ m.field }} ({{ m.confidence|floatformat:0 }})</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if missing %}
+        <div style="margin-top: 12px;">
+            <strong style="color: #b3402e">Not found (left blank):</strong>
+            <div style="margin-top: 6px;">
+                {% for f in missing %}
+                <span class="el-chip">{{ f }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="el-res-card">
+    <div class="el-res-card-head">Completed Document Preview</div>
+    <div class="el-res-card-body">
+        {% if sheet_html %}
+        <div class="el-res-sheet">{{ sheet_html|safe }}</div>
+        {% else %}
+        <div class="el-empty">Document preview not available for this template format.</div>
+        {% endif %}
+    </div>
+</div>
+
+<p class="el-note">The completed output follows the existing template layout. Unmatched fields remain blank and can be edited by opening the saved record.</p>
+{% endblock %}

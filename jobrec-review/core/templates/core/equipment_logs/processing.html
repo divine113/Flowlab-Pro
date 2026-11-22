@@ -1,0 +1,52 @@
+{% extends 'core/base.html' %}{% load static %}{% block title %}Processing Certificate{% endblock %}{% block content %}
+<link rel="stylesheet" href="{% static 'core/equipment-logs.css' %}">
+<style>
+    .el-proc-card { background: var(--card, #fff); border: 1px solid var(--ei-border, #dce4ea); border-radius: 12px; padding: 32px 24px; max-width: 520px; margin: 24px auto; }
+    .el-proc-title { font-size: 18px; font-weight: 700; color: #10222e; margin: 0 0 8px; }
+    .el-proc-msg { color: var(--mu, #5d7080); font-size: 13px; margin: 0 0 20px; }
+    .el-proc-spinner { width: 40px; height: 40px; border: 4px solid #e3e8ec; border-top-color: #087a80; border-radius: 50%; animation: el-spin 0.8s linear infinite; margin: 0 auto 16px; }
+    @keyframes el-spin { to { transform: rotate(360deg); } }
+    .el-proc-time { font-size: 14px; color: #087a80; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+    .el-proc-hint { font-size: 11px; color: var(--mu, #5d7080); margin-top: 12px; }
+    .el-proc-actions { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
+</style>
+<div class="el-proc-card">
+    <div class="el-proc-spinner"></div>
+    <h2 class="el-proc-title">Processing certificate…</h2>
+    <p class="el-proc-msg">Extracting values against template <strong>{{ template_name }}</strong> and populating the completed document.</p>
+    <div class="el-proc-time" id="elProcTime">0.00 s</div>
+    <p class="el-proc-hint" id="elProcStatus">Analyzing document structure…</p>
+</div>
+<script>
+    (function () {
+        var start = Date.now();
+        var elTime = document.getElementById('elProcTime');
+        var elStatus = document.getElementById('elProcStatus');
+        var token = '{{ token }}';
+
+        function tick() {
+            var elapsed = ((Date.now() - start) / 1000).toFixed(2);
+            elTime.textContent = elapsed + ' s';
+        }
+        setInterval(tick, 100);
+
+        function poll() {
+            fetch('{% url 'equipment_log_processing_status' token=token %}')
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.status === 'complete') {
+                        elStatus.textContent = 'Processing complete — loading results…';
+                        window.location.href = '{% url 'equipment_log_results' token=token %}';
+                    } else if (data.status === 'not_found') {
+                        elStatus.textContent = 'Session expired. Please upload again.';
+                        setTimeout(function () { window.location.href = '{% url 'equipment_log_upload' %}'; }, 1500);
+                    } else {
+                        setTimeout(poll, 500);
+                    }
+                })
+                .catch(function () { setTimeout(poll, 1000); });
+        }
+        setTimeout(poll, 300);
+    })();
+</script>
+{% endblock %}

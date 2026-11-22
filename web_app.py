@@ -50,6 +50,64 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("FLOWLAB_SECRET_KEY", "flowlab-local-mvp")
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024
 
+# Development-only live reload. The Flask reloader restarts the server when
+# Python changes; this script also refreshes open pages when templates, CSS or
+# JavaScript change, so edits appear without a manual browser refresh.
+DEV_RELOAD_SCRIPT = """<script>
+(() => {
+  let known = null;
+  async function poll() {
+    try {
+      const response = await fetch('/__dev/version', {cache: 'no-store'});
+      if (response.ok) {
+        const version = await response.text();
+        if (known === null) known = version;
+        else if (version !== known) location.reload();
+      }
+    } catch (error) { /* server restarting */ }
+    setTimeout(poll, 1000);
+  }
+  poll();
+})();
+</script>"""
+
+
+@app.after_request
+def inject_dev_reload(response):
+    if not app.debug or response.mimetype != "text/html" or response.status_code != 200:
+        return response
+    if response.headers.get("Content-Disposition"):
+        return response
+    html = response.get_data(as_text=True)
+    if "</body>" not in html:
+        return response
+    response.set_data(html.replace("</body>", DEV_RELOAD_SCRIPT + "</body>", 1))
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.get("/__dev/version")
+def dev_asset_version():
+    """Return the newest source timestamp so open pages can detect edits."""
+    if not app.debug:
+        abort(404)
+    roots = (
+        Path(__file__).resolve().parent / "templates",
+        Path(__file__).resolve().parent / "static",
+        Path(__file__).resolve().parent / "app",
+    )
+    suffixes = {".py", ".html", ".css", ".js"}
+    latest = 0
+    for root in roots:
+        for path in root.rglob("*"):
+            if path.suffix.lower() not in suffixes or not path.is_file():
+                continue
+            try:
+                latest = max(latest, path.stat().st_mtime_ns)
+            except OSError:
+                continue
+    return Response(str(latest), mimetype="text/plain", headers={"Cache-Control": "no-store"})
+
 
 @before_render_template.connect_via(app)
 def add_breadcrumbs(sender, template, context, **extra):
@@ -482,7 +540,7 @@ def prepare_service_request(upload):
 @app.before_request
 def ensure_database():
     if request.endpoint in {"landing", "landing_first", "download_landing", "ei_lab", "lab_policies_access",
-            "public_policy_file", "static"}:
+            "public_policy_file", "static", "dev_asset_version"}:
         return
     initialize_database()
     if app.config.get("TESTING") or request.endpoint in {

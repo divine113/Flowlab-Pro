@@ -1273,4 +1273,5 @@ post_delete.connect(remove_location_from_address, sender=CompanyAddress)
 from .workflow_models import (CalibrationLogTemplate, JobUUT, JobSubmission, JobReview, JobDecision,
     JobScheduleRevision, JobDocument, TechnicalRecord, TechnicalRecordRevision,
     PersonnelEvidence, PersonnelCompetency, PersonnelAuthorization,
-    PersonnelProfileRevision, PersonnelCorrectionRequest, PersonnelReviewReminder, CAPARecord, CAPADocument, EquipmentRecord, WorkflowAudit, AdminAccountLink, AdministrativeArchive)
+    PersonnelProfileRevision, PersonnelCorrectionRequest, PersonnelReviewReminder, CAPARecord, CAPADocument, EquipmentRecord, WorkflowAudit, AdminAccountLink, AdministrativeArchive,
+    EquipmentCertificateTemplate, EquipmentCertificateRecord)

@@ -47,3 +47,16 @@ def get_user_signature_url(user):
         return user.personnel_profile.signature_url
     except (Personnel.DoesNotExist, AttributeError):
         return ''
+
+
+def is_administrator(user):
+    """Administrator-only gate (matches role policy; not a grant of Chief/authority)."""
+    if not user.is_authenticated or not user.is_active:
+        return False
+    if user.is_superuser:
+        return True
+    try:
+        person = user.personnel_profile
+        return bool(person.employment_status == 'active' and person.role and person.role.name == 'Administrator')
+    except (Personnel.DoesNotExist, AttributeError):
+        return False

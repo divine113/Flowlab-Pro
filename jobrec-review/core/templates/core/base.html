@@ -133,6 +133,7 @@
                         <a href="{% url 'ei_capa_list' %}">CAPA &amp; NCR</a>
                         <a href="{% url 'ei_retained_records' %}">Retained Records</a>
                         {% if user|has_perm_tag:'view_equipment' or user|has_perm_tag:'manage_ei_jobs' or user.is_superuser %}<a href="{% url 'equipment_list' %}">Lab Equipment</a><a href="{% url 'ei_calibration_programme' %}">Lab Calibration Programme</a>{% endif %}
+                        {% if user|ei_admin_tag %}<a href="{% url 'equipment_logs_home' %}">Equipment Logs</a>{% endif %}
                     </div>
                 </details>
 
@@ -276,9 +277,9 @@
     </script>
     {% endif %}
 {% if can_remove_records %}
-<link rel="stylesheet" href="/static/record-removal.css">
+<link rel="stylesheet" href="{% static 'core/record-removal.css' %}">
 <div id="recordRemovalConfig" data-endpoint="{% url 'ei_record_remove' %}" data-module="ei" hidden>{% csrf_token %}</div>
-<script src="/static/record-removal.js" defer></script>
+<script src="{% static 'core/record-removal.js' %}" defer></script>
 {% endif %}
 </body>
 </html>

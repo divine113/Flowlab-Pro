@@ -292,3 +292,49 @@ class WorkflowAudit(ActorRecord):
 
     class Meta:
         ordering = ['-created_at', '-pk']
+
+
+class EquipmentCertificateTemplate(ActorRecord):
+    """A per-equipment-group template: defines the test-table columns of its log records."""
+    name = models.CharField(max_length=150, unique=True)
+    original_name = models.CharField(max_length=200, blank=True, default='')
+    original_file = models.FileField(storage=private_storage, upload_to=private_upload, null=True, blank=True)
+    activities = models.JSONField(default=list, help_text='Activities-log field labels, in sheet order')
+    columns = models.JSONField(default=list, help_text='Test-data table column names, in sheet order')
+    fixed_values = models.JSONField(default=dict, help_text='Values to keep on every certificate, keyed by slugified label')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name_plural = 'equipment certificate templates'
+
+    def __str__(self):
+        return self.name
+
+
+class EquipmentCertificateRecord(ActorRecord):
+    PASS_FAIL = [('pass', 'Pass'), ('fail', 'Fail')]
+
+    template = models.ForeignKey(EquipmentCertificateTemplate, on_delete=models.PROTECT, related_name='records')
+    template_name = models.CharField(max_length=150, blank=True, default='')
+    serial_no = models.CharField(max_length=100, db_index=True)
+    year = models.PositiveIntegerField(db_index=True)
+    model = models.CharField(max_length=150, blank=True, default='')
+    certificate_no = models.CharField(max_length=100, blank=True, default='')
+    test_date = models.DateField()
+    due_date = models.DateField(null=True, blank=True)
+    environment = models.CharField(max_length=200, blank=True, default='')
+    conclusion = models.CharField(max_length=4, choices=PASS_FAIL, blank=True, default='')
+    columns = models.JSONField(default=list)
+    rows = models.JSONField(default=list)
+    field_values = models.JSONField(default=dict, help_text='Activities-log values keyed by slugified label')
+    file_name = models.CharField(max_length=255, blank=True, default='', help_text='Original uploaded certificate file name')
+    updated_at = models.DateTimeField(auto_now=True)
+    change_history = models.JSONField(default=list)
+
+    class Meta:
+        ordering = ['-year', 'template_name', 'serial_no']
+        unique_together = [('template', 'serial_no', 'year')]
+
+    def __str__(self):
+        return f'{self.serial_no} · {self.template_name} · {self.year}'

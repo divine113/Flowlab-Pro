@@ -5,6 +5,7 @@ from . import views
 from . import ei_views
 from . import capa_views
 from . import equipment_records
+from . import equipment_logs
 from . import retained_records
 from . import record_removal
 from .forms import CustomPasswordChangeForm
@@ -159,6 +160,24 @@ urlpatterns = [
     path('equipment/<int:pk>/records/<str:action>/',equipment_records.record_action,name='ei_equipment_record_add'),
     path('equipment/<int:pk>/records/<int:record_id>/<str:action>/',equipment_records.record_action,name='ei_equipment_record_action'),
     path('equipment/records/<int:pk>/file/',equipment_records.document,name='ei_equipment_file'),
+
+    # Equipment Logs (Administrator-only)
+    path('equipment-logs/',equipment_logs.home,name='equipment_logs_home'),
+    path('equipment-logs/upload/',equipment_logs.upload,name='equipment_log_upload'),
+    path('equipment-logs/review/<str:token>/',equipment_logs.review,name='equipment_log_review'),
+    path('equipment-logs/year/<int:year>/',equipment_logs.year_view,name='equipment_log_year'),
+    path('equipment-logs/year/<int:year>/<int:template_pk>/',equipment_logs.type_view,name='equipment_log_type'),
+    path('equipment-logs/record/<int:record_pk>/unlock/',equipment_logs.unlock_record,name='equipment_log_unlock'),
+    path('equipment-logs/record/<int:record_pk>/update/',equipment_logs.update_record,name='equipment_log_record_update'),
+    path('equipment-logs/record/<int:record_pk>/download/',equipment_logs.download_record,name='equipment_log_record_download'),
+    path('equipment-logs/year/<int:year>/<int:template_pk>/download/',equipment_logs.download_type,name='equipment_log_type_download'),
+    path('equipment-logs/year/<int:year>/download/',equipment_logs.download_year,name='equipment_log_year_download'),
+    path('equipment-logs/templates/',equipment_logs.templates_folder,name='equipment_log_templates'),
+    path('equipment-logs/templates/upload/',equipment_logs.upload_template,name='equipment_log_template_upload'),
+    path('equipment-logs/templates/upload/columns/',equipment_logs.template_confirm,name='equipment_log_template_confirm'),
+    path('equipment-logs/templates/upload/columns/',equipment_logs.template_confirm,name='equipment_log_template_columns'),
+    path('equipment-logs/templates/<int:template_pk>/delete/',equipment_logs.template_delete,name='equipment_log_template_delete'),
+    path('equipment-logs/record/<int:record_pk>/delete/',equipment_logs.delete_record,name='equipment_log_record_delete'),
 
     # Primaries (company reference standards)
     path('primaries/', views.PrimaryListView.as_view(), name='primary_list'),

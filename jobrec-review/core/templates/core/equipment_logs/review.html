@@ -1,0 +1,91 @@
+{% extends 'core/base.html' %}{% load static %}{% block title %}Review &amp; fix{% endblock %}{% block content %}
+<link rel="stylesheet" href="{% static 'core/equipment-logs.css' %}">
+<style>
+    .el-card { background: var(--card, #fff); border: 1px solid var(--ei-border, #dce4ea); border-radius: 12px; padding: 14px; }
+    .el-card h2 { margin: 0 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: #0b4a5a; }
+    .el-hint { color: var(--mu, #5d7080); font-size: 12px; margin: 0 0 10px; }
+    .el-chip { display: inline-block; background: var(--bg, #f1f5f8); border-radius: 8px; padding: 4px 10px; font-size: 12px; color: var(--mu, #5d7080); margin: 2px 4px 2px 0; }
+    .el-chip.el-missing { background: #fff2d6; color: #9a6a00; outline: 1px solid #f0c04a; }
+    .el-chip.el-review { background: #fff2d6; color: #9a6a00; outline: 1px solid #f0c04a; }
+    .el-conf-badge { font-size: 10px; padding: 1px 6px; border-radius: 9px; margin-left: 6px; font-weight: 700; }
+    .el-conf-high { background: #e3f4ea; color: #1a7f4b; border: 1px solid #b7e4c7; }
+    .el-conf-med { background: #fff2d6; color: #9a6a00; border: 1px solid #f0c04a; }
+    .el-conf-low { background: #fdeaea; color: #b3402e; border: 1px solid #e08a78; }
+    .el-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; align-items: center; }
+    .el-mini { padding: 6px 12px; border-radius: 8px; border: 1px solid #c9dce5; background: var(--card, #fff); cursor: pointer; font: inherit; font-size: 12px; text-decoration: none; color: inherit; }
+    .el-note { font-size: 12px; color: var(--mu, #5d7080); margin-top: 8px; }
+    .el-dialog { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 50; align-items: center; justify-content: center; padding: 24px; box-sizing: border-box; }
+    .el-dialog.open { display: flex; }
+    .el-dialog-panel { background: var(--card, #fff); border-radius: 12px; padding: 24px 28px; max-width: 460px; width: 100%; box-shadow: 0 10px 40px rgba(0,0,0,.25); }
+    .el-dialog-panel h3 { margin: 0 0 10px; font-size: 15px; color: #10222e; }
+    .el-dialog-panel p { margin: 0 0 18px; font-size: 13px; color: #334755; line-height: 1.5; }
+    .el-dialog-actions { display: flex; gap: 10px; justify-content: flex-end; }
+</style>
+<div class="el-card">
+    <h2>{{ filename }} — {{ template.name }}</h2>
+    <p class="el-hint">Extracted values against template <strong>{{ template.name }}</strong>. Verify and correct anything below, then click Done.</p>
+    {% if missing %}
+    <div class="el-chips" aria-label="Fields not found">
+        <span class="el-chip el-missing">Not found — fill in:</span>
+        {% for f in missing %}<span class="el-chip el-missing">{{ f }}</span>{% endfor %}
+    </div>
+    {% endif %}
+    {% if needs_review %}
+    <div class="el-chips" aria-label="Fields needing review">
+        <span class="el-chip el-review">Verify these fields:</span>
+        {% for m in needs_review %}<span class="el-chip el-review" title="{{ m.field }}: {{ m.confidence|floatformat:2 }}">{{ m.field }} ({{ m.confidence|floatformat:0 }})</span>{% endfor %}
+    </div>
+    {% endif %}
+    <form id="el-review-form" method="post" action="{% url 'equipment_log_review' token=token %}">
+        {% csrf_token %}
+        <input type="hidden" name="rows_json" value="[]">
+        <div id="el-grid">{{ sheet_html }}</div>
+        <div class="el-actions">
+            <button type="button" class="ei-records-primary" id="el-done-btn">Done</button>
+            <a href="{% url 'equipment_log_upload' %}" class="el-mini">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<div class="el-dialog" id="el-done-dialog">
+    <div class="el-dialog-panel">
+        <h3>Add this certificate to the log?</h3>
+        <p>The uploaded file will not be stored. Saving creates the log record from the values shown above (including any edits you made).</p>
+        <div class="el-dialog-actions">
+            <button type="button" class="el-mini" id="el-dialog-cancel">Cancel</button>
+            <button type="button" class="ei-records-primary" id="el-dialog-yes">Yes, add to log</button>
+        </div>
+    </div>
+</div>
+<script src="{% static 'core/js/equipment_logs.js' %}"></script>
+<script>EquipmentLogs.bindSerializer('el-grid', 'el-review-form');</script>
+<script>
+(function(){
+    var doneBtn = document.getElementById('el-done-btn');
+    var dialog = document.getElementById('el-done-dialog');
+    var cancelBtn = document.getElementById('el-dialog-cancel');
+    var yesBtn = document.getElementById('el-dialog-yes');
+    var form = document.getElementById('el-review-form');
+
+    doneBtn.addEventListener('click', function () {
+        dialog.classList.add('open');
+    });
+
+    cancelBtn.addEventListener('click', function () {
+        dialog.classList.remove('open');
+    });
+
+    yesBtn.addEventListener('click', function () {
+        dialog.classList.remove('open');
+        form.submit();
+    });
+
+    // Clicking outside the dialog closes it
+    dialog.addEventListener('click', function (e) {
+        if (e.target === dialog) {
+            dialog.classList.remove('open');
+        }
+    });
+})();
+</script>
+{% endblock %}

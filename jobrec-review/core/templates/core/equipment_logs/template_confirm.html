@@ -15,6 +15,7 @@
     .el-candidate label.el-toggle { display: flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 700; color: #087a80; cursor: pointer; }
     .el-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; align-items: center; }
     @media (max-width: 1000px) { .el-cols { flex-direction: column; } }
+    .fixed-value-input { width: 80px; font-size: 11px; margin-left: 8px; }
 </style>
 <p class="el-note">Sheet: <b>{{ sheet }}</b> · The system read the sheet itself. Include the blocks you want logged — nothing is stored without your say-so.</p>
 {% if sheets|length > 1 %}
@@ -49,18 +50,41 @@
             </small>
             <ul>
                 {% if candidate.type == 'fields' %}
-                    {% for label in candidate.labels %}<li>{{ label }}</li>{% endfor %}
+                    {% for f in candidate.fields %}
+                    <li>
+                        <label class="el-toggle" style="display:flex;gap:8px;align-items:center;font-size:13px;font-weight:600;color:#087a80;cursor:pointer;">
+                            <input type="checkbox" name="fixed_{{ forloop.parentloop.counter0 }}_{{ forloop.counter0 }}" value="{{ f.key }}" class="fixed-checkbox">
+                            {{ f.label }}
+                        </label>
+                        {% if f.sample %}
+                        <input type="text" name="fixed_value_{{ forloop.parentloop.counter0 }}_{{ forloop.counter0 }}" value="{{ f.sample }}" style="width:80px; font-size:11px; margin-left:8px; display:none;" class="fixed-value-input">
+                        {% endif %}
+                    </li>
+                    {% endfor %}
                 {% else %}
                     {% for column in candidate.columns %}<li>{{ column }}</li>{% endfor %}
                 {% endif %}
             </ul>
-            <div class="el-block-sample">
-                {% if candidate.type == 'fields' %}e.g. {{ candidate.labels.0 }} = {{ candidate.samples.0|default:'(empty)' }}{% else %}e.g. row: {% for cell in candidate.samples %}{% if cell %}{{ cell }}{% if not forloop.last %} | {% endif %}{% endif %}{% endfor %}{% endif %}
-            </div>
         </div>
         {% empty %}
         <div class="el-candidate"><b>Nothing detected.</b><p class="el-note">The parser couldn't find an activities block or a test-data table in this sheet. Check the sheet contains a labelled table, or fix its layout and upload it again.</p></div>
         {% endfor %}
         <button class="ei-records-primary" type="submit" {% if not candidates %}disabled{% endif %}>Save template →</button>
     </form>
-</div>{% endblock %}
+</div>
+<script>
+(function(){
+    document.querySelectorAll('.fixed-checkbox').forEach(function (cb) {
+        cb.addEventListener('change', function () {
+            var ci = cb.name.match(/fixed_(\d+)_(\d+)/);
+            if (!ci) { return; }
+            var input = document.querySelector('input[name="fixed_value_' + ci[1] + '_' + ci[2] + '"]');
+            if (input) {
+                input.style.display = cb.checked ? 'inline-block' : 'none';
+                if (!cb.checked) { input.value = ''; }
+            }
+        });
+    });
+})();
+</script>
+{% endblock %}

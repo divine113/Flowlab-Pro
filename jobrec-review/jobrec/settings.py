@@ -95,6 +95,11 @@ INSTALLED_APPS = [
     'core',
 ]
 
+# Development-only: refresh open browser pages when templates or static files
+# change, in addition to Django's own auto-restart on Python edits.
+if DEBUG:
+    INSTALLED_APPS.append('django_browser_reload')
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -105,6 +110,9 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+if DEBUG:
+    MIDDLEWARE.append('django_browser_reload.middleware.BrowserReloadMiddleware')
 
 ROOT_URLCONF = 'jobrec.urls'
 AUTHENTICATION_BACKENDS = ['core.integrated_auth.IntegratedAdminBackend']

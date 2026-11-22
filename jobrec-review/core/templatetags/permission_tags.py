@@ -1,11 +1,15 @@
 from django import template
-from core.auth_utils import has_perm
+from core.auth_utils import has_perm, is_administrator
 
 register = template.Library()
 
 @register.filter
 def has_perm_tag(user, codename):
     return has_perm(user, codename)
+
+@register.filter
+def ei_admin_tag(user):
+    return is_administrator(user)
 
 
 @register.filter

@@ -1,0 +1,119 @@
+{% extends 'core/base.html' %}{% load static %}{% block title %}{{ template.name }} · {{ year }}{% endblock %}{% block content %}
+<link rel="stylesheet" href="{% static 'core/equipment-logs.css' %}">
+<style>
+    .el-card { background: var(--card, #fff); border: 1px solid var(--ei-border, #dce4ea); border-radius: 12px; padding: 14px; }
+    .el-card h2 { margin: 0 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: #0b4a5a; }
+    .el-hint { color: var(--mu, #5d7080); font-size: 12px; margin: 0 0 10px; }
+    .el-chip { display: inline-block; background: var(--bg, #f1f5f8); border-radius: 8px; padding: 4px 12px; font-size: 12px; font-weight: 600; margin-bottom: 10px; }
+    .el-chip.pass { background: #e3f4ea; color: #1a7f4b; } .el-chip.fail { background: #fbe6e4; color: #b3261e; }
+    .el-editnote { background: #fff2d6; color: #9a6a00; border-radius: 8px; padding: 8px 12px; font-size: 12px; margin: 8px 0; }
+    .el-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; align-items: center; }
+    .el-mini { padding: 6px 12px; border-radius: 8px; border: 1px solid #c9dce5; background: var(--card, #fff); cursor: pointer; font: inherit; font-size: 13px; color: inherit; text-decoration: none; }
+    .el-unlock { background: #fff2d6; border: 1px solid #f0c04a; border-radius: 10px; padding: 12px; margin: 10px 0; }
+    .el-unlock textarea { width: 100%; box-sizing: border-box; border: 1px solid #e3c878; border-radius: 8px; padding: 8px 10px; background: #fffdf4; font: inherit; }
+    .el-split { display: flex; gap: 16px; align-items: flex-start; }
+    @media (max-width: 900px) { .el-split { flex-direction: column; } }
+    .el-side { flex: 0 0 260px; min-width: 240px; }
+    .el-main { flex: 1; min-width: 0; }
+    .el-list-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mu, #5d7080); margin: 0 0 8px; }
+    .el-record-list { list-style: none; margin: 0; padding: 0; }
+    .el-record-list li { border: 1px solid var(--ei-border, #dce4ea); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; background: var(--card, #fff); }
+    .el-record-list li.selected { border-color: #087a80; background: #eef6f7; }
+    .el-record-list li a { text-decoration: none; color: inherit; display: block; }
+    .el-record-name { font-weight: 600; font-size: 14px; }
+    .el-record-serial { font-size: 11px; color: var(--mu, #5d7080); margin-top: 2px; }
+    .el-empty { text-align: center; color: var(--mu, #5d7080); padding: 24px; }
+    .el-conclusion-strip { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+    .el-conclusion-strip label { font-size: 11px; font-weight: 700; letter-spacing: .04em; color: #0b4a5a; text-transform: uppercase; }
+    .el-conclusion-strip select { padding: 6px 10px; border: 1px solid #c9dce5; border-radius: 8px; font: inherit; background: #fff; }
+    .el-history { margin-top: 16px; border-top: 1px solid var(--ei-border, #dce4ea); padding-top: 10px; }
+    .el-history b { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--mu, #5d7080); }
+</style>
+
+{% if records %}
+<div class="el-split">
+    <!-- Left: record list -->
+    <div class="el-side">
+        <div class="el-card" style="padding:0">
+            <p class="el-list-title">Records for {{ year }}</p>
+            <ul class="el-record-list">
+                {% for record in records %}
+                <li class="{% if selected and record.pk == selected.pk %}selected{% endif %}">
+                    <a href="{% url 'equipment_log_type' year=year template_pk=template.pk %}?serial={{ record.serial_no }}">
+                        <span class="el-record-name">{{ record.file_name|default:record.serial_no }}</span>
+                        <span class="el-record-serial">{{ record.serial_no }}</span>
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+            <div style="padding:10px 12px">
+                <a class="el-mini" href="{% url 'equipment_log_upload' %}">Add certificate</a>
+                <a class="el-mini" href="{% url 'equipment_log_type_download' year=year template_pk=template.pk %}">Download Excel</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: selected record panel -->
+    <div class="el-main">
+        {% if selected %}
+        <div class="el-card">
+            <h2 style="margin:0">{{ selected.file_name|default:selected.serial_no }}</h2>
+            <div style="color:var(--mu,#5d7080);margin-bottom:8px">{{ template.name }} · {{ year }} calibration</div>
+
+            {% if unlock %}
+            <div class="el-editnote">Editing unlocked. Every change is recorded in the change history below.</div>
+            <form method="post" action="{% url 'equipment_log_record_update' selected.pk %}" id="el-edit-form">
+                {% csrf_token %}
+                <input type="hidden" name="rows_json" value="[]">
+                <div id="el-grid">{{ sheet_html }}</div>
+                <div class="el-conclusion-strip">
+                    <label for="f-res">Conclusion</label>
+                    <select id="f-res" name="conclusion">
+                        <option value="" {% if not selected.conclusion %}selected{% endif %}>—</option>
+                        <option value="pass" {% if selected.conclusion == 'pass' %}selected{% endif %}>Pass</option>
+                        <option value="fail" {% if selected.conclusion == 'fail' %}selected{% endif %}>Fail</option>
+                    </select>
+                    <button type="button" class="el-mini" onclick="EquipmentLogs.addRow('el-grid')">+ Row</button>
+                    <button type="submit" class="ei-records-primary">Done editing</button>
+                    <a class="el-mini" href="{% url 'equipment_log_record_download' selected.pk %}">Download this sheet</a>
+                </div>
+            </form>
+
+            {% else %}
+            <div id="el-grid">{{ sheet_html }}</div>
+            <div class="el-actions">
+                <a class="el-mini" href="{% url 'equipment_log_record_download' selected.pk %}">Download this sheet</a>
+                <form method="post" action="{% url 'equipment_log_unlock' selected.pk %}" class="el-unlock" style="margin-top:10px">
+                    {% csrf_token %}
+                    <b>Edit record</b>
+                    <p style="margin:4px 0 8px;color:var(--mu,#5d7080);font-size:12px">Saved records are controlled. State why you need to edit this one.</p>
+                    <textarea name="reason" rows="2" required placeholder="e.g. Serial number typed wrongly"></textarea>
+                    <div style="margin-top:8px"><button type="submit" class="ei-records-primary">Unlock for editing</button></div>
+                </form>
+                <form method="post" action="{% url 'equipment_log_record_delete' selected.pk %}" class="el-unlock" style="margin-top:10px">
+                    {% csrf_token %}
+                    <b style="color:#b3261e">Delete record</b>
+                    <p style="margin:4px 0 8px;color:var(--mu,#5d7080);font-size:12px">This cannot be undone. The certificate record will be removed from the log.</p>
+                    <div style="margin-top:8px"><button type="submit" class="el-mini" style="color:#b3261e;border-color:#b3261e" onclick="return confirm('Are you sure you want to delete this log record? This cannot be undone.')">Delete record</button></div>
+                </form>
+            </div>
+            {% endif %}
+
+            <div class="el-history">
+                <b>Change history</b>
+                <ul>
+                    {% for entry in selected.change_history reversed %}<li>{{ entry.when|slice:':19' }} · {{ entry.who }} · {{ entry.reason }}</li>{% empty %}<li>No changes since this record was saved.</li>{% endfor %}
+                </ul>
+            </div>
+        </div>
+        <script src="{% static 'core/js/equipment_logs.js' %}"></script>
+        <script>EquipmentLogs.bindSerializer('el-grid', 'el-edit-form');</script>
+        {% else %}
+        <div class="el-empty">Select a record from the list to view its details.</div>
+        {% endif %}
+    </div>
+</div>
+{% else %}
+<div class="el-empty">No records for {{ year }} yet. Records are added by uploading certificates.</div>
+{% endif %}
+{% endblock %}
