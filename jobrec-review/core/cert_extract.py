@@ -34,12 +34,23 @@ from .cert_fields import docx_structure, extract
 # ---------------------------------------------------------------------------
 
 def _parse_iso_date(value):
-    """Parse an ISO date string, returning a date object or None."""
+    """Parse a date string, returning a date object or None.
+
+    Accepts ordinals (1st, 2nd, 3rd, 27th), full and short month names,
+    commas, dots and slashes as separators.
+    """
     if not value:
         return None
     value = value.strip()
-    for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y', '%Y/%m/%d',
-                '%d %b %Y', '%b %d, %Y', '%d %B %Y'):
+    # Remove ordinal suffixes (1st, 2nd, 3rd, 27th, etc.)
+    value = re.sub(r'(\d+)(st|nd|rd|th)', r'\1', value, flags=re.IGNORECASE)
+    formats = (
+        '%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y', '%Y/%m/%d',
+        '%d.%m.%Y', '%m.%d.%Y', '%d.%m.%y',
+        '%d %b %Y', '%b %d, %Y', '%d %B %Y', '%B %d, %Y',
+        '%d %b, %Y', '%d %B, %Y', '%b %d %Y', '%B %d %Y',
+    )
+    for fmt in formats:
         try:
             return datetime.strptime(value, fmt).date()
         except ValueError:

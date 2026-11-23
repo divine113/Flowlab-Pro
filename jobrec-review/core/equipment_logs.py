@@ -24,14 +24,14 @@ from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from openpyxl import Workbook
 from django.db.models import Count
 
 from . import ei_workflow as service
 from .auth_utils import is_administrator
 from .cert_extract import extract_certificate, populate_template_workbook, _parse_iso_date
 from .cert_sheet import label_slug
-from .models import EquipmentCertificateRecord, EquipmentCertificateTemplate, Primary
+from .cert_xlsx import workbook_bytes
+from .models import CompanyProfile, EquipmentCertificateRecord, EquipmentCertificateTemplate, Primary
 
 TMP_DIR = Path(settings.EI_PRIVATE_STORAGE_ROOT) / 'tmp' / 'cert_upload'
 SESSION_KEY = 'equipment_log_upload'
@@ -109,6 +109,22 @@ _CONTENT_TYPES = {
 def _content_type(filename):
     suffix = Path(filename).suffix.lower()
     return _CONTENT_TYPES.get(suffix, 'application/octet-stream')
+
+
+def _logo_path():
+    """Filesystem path to the Engineering Automation logo shown in the top bar."""
+    try:
+        company = CompanyProfile.objects.first()
+        if company and company.logo:
+            return company.logo.path
+    except Exception:
+        pass
+    static_dirs = settings.STATICFILES_DIRS or []
+    for static_dir in static_dirs:
+        path = static_dir / 'core' / 'images' / 'image2.jpeg'
+        if path.is_file():
+            return str(path)
+    return None
 
 
 # ----------------------------------------------------------------- home
@@ -260,13 +276,37 @@ def review(request, token):
             if posted != '':
                 values['field_values'][slug] = posted
 
-        # Use edited cell values from the review page (rows_json) when present
-        rows_raw = request.POST.get('rows_json') or ''
-        if rows_raw:
-            try:
-                values['rows'] = json.loads(rows_raw)
-            except (ValueError, TypeError):
-                pass
+        # Read test-data cell inputs from the review page (cell_<row>_<col>).
+        # These take priority over rows_json, which is only a fallback.
+        cells = {}
+        for key, value in request.POST.items():
+            if key.startswith('cell_'):
+                parts = key.split('_')
+                if len(parts) == 3:
+                    try:
+                        row_idx = int(parts[1])
+                        col_idx = int(parts[2])
+                        cells[(row_idx, col_idx)] = value
+                    except ValueError:
+                        pass
+        if cells:
+            max_row = max(r for r, _ in cells.keys())
+            max_col = max(c for _, c in cells.keys())
+            new_rows = []
+            for r in range(max_row + 1):
+                row = []
+                for c in range(max_col + 1):
+                    row.append(cells.get((r, c), ''))
+                new_rows.append(row)
+            values['rows'] = new_rows
+        else:
+            # Use edited cell values from the review page (rows_json) when present
+            rows_raw = request.POST.get('rows_json') or ''
+            if rows_raw:
+                try:
+                    values['rows'] = json.loads(rows_raw)
+                except (ValueError, TypeError):
+                    pass
 
         # Take year from posted test date; fall back to current year if unparseable
         test_date_slug = ''
@@ -344,6 +384,7 @@ def review(request, token):
             template=template,
             template_name=template.name,
             file_name=file_name,
+            year=year,
             test_date=test_date,
             **actor_fields(request.user),
         )
@@ -611,39 +652,52 @@ def _xlsx_response(workbook, filename):
 @_admin_required
 def download_record(request, record_pk):
     record = get_object_or_404(EquipmentCertificateRecord, pk=record_pk)
-    workbook = Workbook()
-    workbook.remove(workbook.active)
-    _record_sheet(workbook, record)
-    return _xlsx_response(workbook, f'{record.template_name} {record.year} {record.file_name}.xlsx')
+    template = record.template
+    logo_path = _logo_path()
+    stem = Path(record.file_name or '').stem or 'Record'
+    fields = [(label, record.field_values.get(label_slug(label), '')) for label in (template.activities or [])]
+    records = [{"name": stem, "fields": fields, "columns": list(record.columns or []), "rows": list(record.rows or [])}]
+    data = workbook_bytes(records, logo_path)
+    from django.http import HttpResponse
+    response = HttpResponse(data, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml')
+    response['Content-Disposition'] = 'attachment; filename="%s"' % _safe_filename(f'{record.template_name} {record.year} {record.file_name}.xlsx')
+    return response
 
 
 @_admin_required
 def download_type(request, year, template_pk):
     year = int(year)
     template = get_object_or_404(EquipmentCertificateTemplate, pk=template_pk)
-    workbook = Workbook()
-    workbook.remove(workbook.active)
-    records = EquipmentCertificateRecord.objects.filter(year=year, template=template).order_by('serial_no')
-    if not records:
-        sheet = workbook.create_sheet('Empty')
-        sheet.append(['No certificates recorded for', template.name, year])
-    for record in records:
-        _record_sheet(workbook, record)
-    return _xlsx_response(workbook, f'{template.name} Certificates Log {year}.xlsx')
+    logo_path = _logo_path()
+    records_qs = EquipmentCertificateRecord.objects.filter(year=year, template=template).order_by('file_name')
+    records = []
+    for record in records_qs:
+        stem = Path(record.file_name or '').stem or 'Record'
+        fields = [(label, record.field_values.get(label_slug(label), '')) for label in (template.activities or [])]
+        records.append({"name": stem, "fields": fields, "columns": list(record.columns or []), "rows": list(record.rows or [])})
+    data = workbook_bytes(records, logo_path)
+    from django.http import HttpResponse
+    response = HttpResponse(data, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml')
+    response['Content-Disposition'] = 'attachment; filename="%s"' % _safe_filename(f'{template.name} Certificates Log {year}.xlsx')
+    return response
 
 
 @_admin_required
 def download_year(request, year):
     year = int(year)
-    workbook = Workbook()
-    workbook.remove(workbook.active)
-    records = EquipmentCertificateRecord.objects.filter(year=year).order_by('template_name', 'serial_no')
-    if not records:
-        sheet = workbook.create_sheet('Empty')
-        sheet.append(['No certificates recorded for', year])
-    for record in records:
-        _record_sheet(workbook, record)
-    return _xlsx_response(workbook, f'Equipment Certificates Log {year}.xlsx')
+    logo_path = _logo_path()
+    records_qs = EquipmentCertificateRecord.objects.filter(year=year).order_by('template_name', 'file_name')
+    records = []
+    for record in records_qs:
+        stem = Path(record.file_name or '').stem or 'Record'
+        template = record.template
+        fields = [(label, record.field_values.get(label_slug(label), '')) for label in (template.activities or [])]
+        records.append({"name": stem, "fields": fields, "columns": list(record.columns or []), "rows": list(record.rows or [])})
+    data = workbook_bytes(records, logo_path)
+    from django.http import HttpResponse
+    response = HttpResponse(data, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml')
+    response['Content-Disposition'] = 'attachment; filename="%s"' % _safe_filename(f'Equipment Certificates Log {year}.xlsx')
+    return response
 
 
 # ----------------------------------------------------------------- templates folder
