@@ -39,9 +39,8 @@
             <ul class="el-record-list">
                 {% for record in records %}
                 <li class="{% if selected and record.pk == selected.pk %}selected{% endif %}">
-                    <a href="{% url 'equipment_log_type' year=year template_pk=template.pk %}?serial={{ record.serial_no }}">
-                        <span class="el-record-name">{{ record.file_name|default:record.serial_no }}</span>
-                        <span class="el-record-serial">{{ record.serial_no }}</span>
+                    <a href="{% url 'equipment_log_type' year=year template_pk=template.pk %}?file={{ record.file_name|urlencode }}">
+                        <span class="el-record-name">{{ record.file_name }}</span>
                     </a>
                 </li>
                 {% endfor %}

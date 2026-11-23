@@ -49,11 +49,17 @@
 
 <div class="el-dialog" id="el-done-dialog">
     <div class="el-dialog-panel">
+        {% if replace_confirm %}
+        <h3>A record named "{{ existing_file_name }}" already exists.</h3>
+        <p>Replacing it will overwrite the saved record with the values shown above (including any edits you made).</p>
+        <input type="hidden" name="replace" value="1">
+        {% else %}
         <h3>Add this certificate to the log?</h3>
         <p>The uploaded file will not be stored. Saving creates the log record from the values shown above (including any edits you made).</p>
+        {% endif %}
         <div class="el-dialog-actions">
             <button type="button" class="el-mini" id="el-dialog-cancel">Cancel</button>
-            <button type="button" class="ei-records-primary" id="el-dialog-yes">Yes, add to log</button>
+            <button type="button" class="ei-records-primary" id="el-dialog-yes">{% if replace_confirm %}Replace{% else %}Yes, add to log{% endif %}</button>
         </div>
     </div>
 </div>

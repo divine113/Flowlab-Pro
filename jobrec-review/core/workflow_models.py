@@ -333,8 +333,8 @@ class EquipmentCertificateRecord(ActorRecord):
     change_history = models.JSONField(default=list)
 
     class Meta:
-        ordering = ['-year', 'template_name', 'serial_no']
-        unique_together = [('template', 'serial_no', 'year')]
+        ordering = ['-year', 'template_name', 'file_name']
+        unique_together = [('template', 'file_name', 'year')]
 
     def __str__(self):
-        return f'{self.serial_no} · {self.template_name} · {self.year}'
+        return f'{self.file_name} · {self.template_name} · {self.year}'

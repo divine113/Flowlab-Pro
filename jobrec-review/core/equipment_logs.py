@@ -126,7 +126,7 @@ def home(request):
         year_cards.append({
             'year': year,
             'types': year_records.values('template').distinct().count(),
-            'serials': year_records.values('serial_no').distinct().count(),
+            'serials': year_records.values('file_name').distinct().count(),
         })
     return render(request, 'core/equipment_logs/home.html', {
         'year_cards': year_cards,
@@ -268,17 +268,6 @@ def review(request, token):
             except (ValueError, TypeError):
                 pass
 
-        # --- BUG 3 fix: take serial from the posted serial-label field ---
-        serial_label = None
-        for lbl in (template.activities or []):
-            if 'serial' in lbl.lower() or 'tag' in lbl.lower():
-                serial_label = lbl
-                break
-        serial_slug = label_slug(serial_label) if serial_label else ''
-        posted_serial = (request.POST.get(f'act_{serial_slug}', '') or '').strip() if serial_slug else ''
-        internal_serial = (result.get('internal', {}) or {}).get('serial_no', '')
-        serial = posted_serial or internal_serial or (values.get('serial_no') or '').strip()
-
         # Take year from posted test date; fall back to current year if unparseable
         test_date_slug = ''
         for lbl in (template.activities or []):
@@ -294,8 +283,15 @@ def review(request, token):
             test_date = timezone.localdate()
         year = test_date.year
 
-        if not serial:
-            messages.error(request, 'Serial number is required to add this certificate to the log.')
+        file_name = result['filename']
+
+        # Check for duplicate (template + file_name + year, case-insensitive)
+        existing = EquipmentCertificateRecord.objects.filter(
+            template=template, file_name__iexact=file_name, year=year
+        ).first()
+
+        if existing and not request.POST.get('replace'):
+            # Show replace confirmation dialog
             sheet_html = ''
             try:
                 from .cert_sheet import render_sheet, load_sheet
@@ -336,21 +332,21 @@ def review(request, token):
                 'needs_review': needs_review,
                 'total_fields': len(result['field_matches']),
                 'page_title': 'Review & fix',
+                'replace_confirm': True,
+                'existing_file_name': existing.file_name,
             })
 
-        serial_key = serial.upper()
+        # Save the record (delete existing if replacing)
+        if existing:
+            existing.delete()
 
-        record, _ = EquipmentCertificateRecord.objects.get_or_create(
-            template=template, serial_no=serial_key, year=year,
-            defaults={
-                'template_name': template.name,
-                'test_date': test_date,
-                'file_name': result['filename'],
-                **actor_fields(request.user),
-            },
+        record = EquipmentCertificateRecord(
+            template=template,
+            template_name=template.name,
+            file_name=file_name,
+            test_date=test_date,
+            **actor_fields(request.user),
         )
-        record.template_name = template.name
-        record.test_date = test_date
         record.due_date = _parse_iso_date(values.get('due_date'))
         record.model = values.get('model', '')
         record.certificate_no = values.get('certificate_no', '')
@@ -359,21 +355,21 @@ def review(request, token):
         record.columns = values.get('columns', [])
         record.rows = values.get('rows', [])
         record.field_values = values.get('field_values') or {}
-        record.file_name = result['filename']
         history_entry = {
             'when': timezone.now().isoformat(timespec='seconds'),
             'who': request.user.username,
             'reason': 'Certificate uploaded',
         }
-        record.change_history = list(record.change_history or []) + [history_entry]
+        record.change_history = [history_entry]
         record.save()
+        year = record.year
 
         # Clean up staged upload
         _clear_upload(request)
 
-        # --- BUG 2 fix: serial goes in query string, not as a URL kwarg ---
+        # Redirect using record id + file query param
         url = reverse('equipment_log_type', kwargs={'year': record.year, 'template_pk': template.pk})
-        return redirect('%s?serial=%s' % (url, record.serial_no))
+        return redirect('%s?file=%s' % (url, record.file_name))
 
     # Render review page
     sheet_html = ''
@@ -436,11 +432,11 @@ def year_view(request, year):
 def type_view(request, year, template_pk):
     year = int(year)
     template = get_object_or_404(EquipmentCertificateTemplate, pk=template_pk)
-    records = list(EquipmentCertificateRecord.objects.filter(year=year, template=template).order_by('serial_no'))
-    selected_serial = request.GET.get('serial')
+    records = list(EquipmentCertificateRecord.objects.filter(year=year, template=template).order_by('file_name'))
+    selected_file = request.GET.get('file')
     selected = None
     for record in records:
-        if record.serial_no == (selected_serial or '').upper() or (selected is None and not selected_serial):
+        if record.file_name == (selected_file or '') or (selected is None and not selected_file):
             selected = record
             break
     unlock_flag = f'equipment_log_unlock_{template.pk}_{year}_{selected.pk}' if selected else None
@@ -488,9 +484,9 @@ def unlock_record(request, record_pk):
         request.session[f'equipment_log_reason_{record.pk}'] = reason
         request.session.modified = True
         messages.info(request, 'Editing unlocked. Remember: every change is recorded.')
-    return redirect('%s?serial=%s' % (
+    return redirect('%s?file=%s' % (
         reverse('equipment_log_type', kwargs={'year': record.year, 'template_pk': record.template_id}),
-        record.serial_no))
+        record.file_name))
 
 
 @_admin_required
@@ -529,9 +525,9 @@ def update_record(request, record_pk):
     service.audit(request.user, None, 'equipment_certificate_edited',
                   after={'record': record.pk, 'reason': reason})
     messages.success(request, 'Record updated and history logged.')
-    return redirect('%s?serial=%s' % (
+    return redirect('%s?file=%s' % (
         reverse('equipment_log_type', kwargs={'year': record.year, 'template_pk': record.template_id}),
-        record.serial_no))
+        record.file_name))
 
 
 def _values_from_post_auto(request, template):
@@ -580,7 +576,7 @@ def _sheet_title(workbook, name):
 
 def _record_sheet(workbook, record):
     template = record.template
-    sheet = workbook.create_sheet(_sheet_title(workbook, record.serial_no or 'serial'))
+    sheet = workbook.create_sheet(_sheet_title(workbook, record.file_name or 'serial'))
     sheet.append(['Equipment Log — certificate record'])
     sheet.append([])
     if record.field_values and (template and template.activities):
@@ -618,7 +614,7 @@ def download_record(request, record_pk):
     workbook = Workbook()
     workbook.remove(workbook.active)
     _record_sheet(workbook, record)
-    return _xlsx_response(workbook, f'{record.template_name} {record.year} {record.serial_no}.xlsx')
+    return _xlsx_response(workbook, f'{record.template_name} {record.year} {record.file_name}.xlsx')
 
 
 @_admin_required
@@ -829,10 +825,11 @@ def delete_record(request, record_pk):
     year = record.year
     template_pk = record.template_id
     serial = record.serial_no
+    file_name = record.file_name
     name = record.template_name
     record.delete()
     service.audit(request.user, None, 'equipment_certificate_deleted',
                   after={'record': record_pk, 'serial': serial, 'year': year,
                          'template': name})
-    messages.info(request, f'Deleted log record for serial "{serial}" ({name}, {year}).')
+    messages.info(request, f'Deleted log record for file "{file_name}" ({name}, {year}).')
     return redirect('equipment_log_type', year=year, template_pk=template_pk)
