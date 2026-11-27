@@ -142,7 +142,7 @@ def home(request):
         year_cards.append({
             'year': year,
             'types': year_records.values('template').distinct().count(),
-            'serials': year_records.values('file_name').distinct().count(),
+            'certificates': year_records.count(),
         })
     return render(request, 'core/equipment_logs/home.html', {
         'year_cards': year_cards,
@@ -460,7 +460,7 @@ def year_view(request, year):
     year = int(year)
     records = EquipmentCertificateRecord.objects.filter(year=year)
     types = list(records.values('template', 'template_name')
-                 .annotate(serials=Count('serial_no', distinct=True))
+                 .annotate(certificates=Count('pk'))
                  .order_by('template_name'))
     return render(request, 'core/equipment_logs/year.html', {
         'year': year,

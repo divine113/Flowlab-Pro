@@ -17,7 +17,7 @@
     <a class="el-folder" href="{% url 'equipment_log_year' card.year %}">
         <span class="el-folder-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
         <span class="el-year">{{ card.year }}</span>
-        <small>{{ card.types }} equipment type{{ card.types|pluralize }} · {{ card.serials }} serial number{{ card.serials|pluralize }}</small>
+        <small>{{ card.types }} equipment type{{ card.types|pluralize }} · {{ card.certificates }} certificate{{ card.certificates|pluralize }}</small>
     </a>
     {% endfor %}
     <a class="el-folder el-template-folder" href="{% url 'equipment_log_templates' %}">

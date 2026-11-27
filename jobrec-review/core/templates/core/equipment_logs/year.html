@@ -11,7 +11,7 @@
 <section class="el-list">
     {% for type in types %}
     <div class="el-row">
-        <span><b>{{ type.template_name }}</b><small>{{ type.serials }} serial number{{ type.serials|pluralize }}</small></span>
+        <span><b>{{ type.template_name }}</b><small>{{ type.certificates }} certificate{{ type.certificates|pluralize }}</small></span>
         <span class="el-row-actions">
             <a class="el-mini" href="{% url 'equipment_log_type_download' year type.template %}">Download Excel</a>
             <a class="ei-records-primary" href="{% url 'equipment_log_type' year type.template %}">Open →</a>
